@@ -330,37 +330,64 @@ PHASE 8 - BETTER RETRIEVAL
 PHASE 9 - CITATIONS AND ANSWER QUALITY
 ======================================
 
-[NOT DONE] Standardize citation format.
+[DONE] Standardize citation format.
+       Retrieval responses now return source ids S1, S2, etc. with document
+       name, page number, and chunk_id.
 
-[NOT DONE] Ensure every generated answer includes sources when context is used.
+[DONE] Ensure every generated answer includes sources when context is used.
+       Prompt requires source markers like [S1].
+       API/CLI generation uses llama-server, and post-processing appends source
+       markers when a non-empty generated answer omits them.
 
-[NOT DONE] Handle missing answer case explicitly.
+[DONE] Handle missing answer case explicitly.
+       Prompt instructs the model to say it does not know when context is
+       missing. API validation also tracks empty-context behavior.
 
-[NOT DONE] Add prompt-injection-resistant context formatting.
+[DONE] Add prompt-injection-resistant context formatting.
+       Prompt separates system instructions, retrieved_context, sources, and
+       user_question. It explicitly ignores instructions inside context.
 
-[NOT DONE] Add answer validation checks:
-           source presence, empty context handling, and unsupported claim detection.
+[DONE] Add answer validation checks:
+       source presence, empty context handling, and unsupported claim detection.
+       Implemented deterministic checks for source presence, empty context,
+       citation marker validity, required citation presence, generated answer
+       language, and a basic unsupported-claim guard based on citations.
 
-[NOT DONE] Store query, retrieved chunks, answer, and citations for debugging.
+[DONE] Store query, retrieved chunks, answer, and citations for debugging.
+       Added query_logs table and API query logging with retrieved chunks,
+       citations, validation metadata, latency, and generated answer state.
 
 
 PHASE 10 - EVALUATION HARNESS
 =============================
 
-[NOT DONE] Create evaluation dataset format:
-           question, language, expected answer, expected source, notes.
+[DONE] Create evaluation dataset format:
+       JSONL format includes question, language, expected_sources, and notes.
+       Optional expected_answer_contains supports lightweight generated-answer
+       checks when --generate is used.
 
-[NOT DONE] Add at least 10 seed evaluation questions.
+[DONE] Add at least 10 seed evaluation questions.
+       Added data/eval/seed_eval.jsonl with 10 multilingual retrieval checks.
 
-[NOT DONE] Measure retrieval Recall@K.
+[DONE] Measure retrieval Recall@K.
+       eval-retrieval reports Recall@K.
 
-[NOT DONE] Measure whether expected source appears in retrieved chunks.
+[DONE] Measure whether expected source appears in retrieved chunks.
+       eval-retrieval reports pass/fail and best rank per case.
 
-[NOT DONE] Track answer language correctness.
+[DONE] Track answer language correctness.
+       Eval cases store expected language, and --generate validates detected
+       answer language against that expected language.
 
-[NOT DONE] Track citation correctness.
+[DONE] Track citation correctness.
+       --generate validates citation marker presence and marker correctness
+       against retrieved source ids.
 
-[NOT DONE] Add repeatable evaluation CLI command.
+[DONE] Add repeatable evaluation CLI command.
+       Command exists as: uv run mrag eval-retrieval
+       Latest run: 10/10 passed, Recall@3 = 1.000 using hybrid + reranker.
+       Generation-aware mode exists as:
+       uv run mrag eval-retrieval --generate
 
 
 PHASE 11 - API LAYER AFTER CLI IS SATISFACTORY
@@ -369,23 +396,36 @@ PHASE 11 - API LAYER AFTER CLI IS SATISFACTORY
 [DONE] Introduce FastAPI backend.
        Added src/multilingual_rag/api.py and serve-api CLI command.
 
-[NOT DONE] Add POST /documents/upload.
+[DONE] Add POST /documents/upload.
+       Upload saves PDF/TXT files and stores parsed document/page records.
 
-[NOT DONE] Add POST /documents/{id}/process.
+[DONE] Add POST /documents/{id}/process.
+       Processing chunks, detects language, embeds chunks, and marks document ready.
 
-[IN-PROGRESS] Add POST /chat.
-              Implemented retrieval endpoint as POST /ask for current local RAG scope.
-              Production chat endpoint remains for later.
+[DONE] Add POST /chat.
+       /chat shares the /ask RAG contract and supports llama-server generation
+       when no_generate=false.
 
 [DONE] Add GET /documents.
 
-[NOT DONE] Add DELETE /documents/{id}.
+[DONE] Add DELETE /documents/{id}.
+       Delete cascades document pages, chunks, and embeddings through PostgreSQL.
 
 [DONE] Reuse CLI-tested ingestion, retrieval, and generation modules.
        API and CLI share the retrieval/prompt builder in src/multilingual_rag/rag.py.
+       API and CLI generation both use the warm llama-server endpoint.
 
 [DONE] Add basic API tests.
-       Manually tested /health, /documents, /ask, and cache behavior.
+       Manually tested /health, /documents, /ask, /chat, /documents/upload,
+       /documents/{id}/process, /documents/{id}, query logging, and cache behavior.
+       Generation request path returns a clear 503 while llama-server is not
+       reachable at http://127.0.0.1:8080.
+
+[DONE] Add basic web frontend for local testing.
+       FastAPI serves a minimal UI at /.
+       The UI supports document upload, document processing into embeddings,
+       document listing/deletion, retrieval settings, and chat generation
+       through the existing /chat endpoint.
 
 
 PHASE 12 - ASYNC INGESTION AND CACHING
@@ -467,13 +507,13 @@ CURRENT PROJECT POSITION
 ========================
 
 Current phase:
-PHASE 8 - BETTER RETRIEVAL
+PHASE 12 - ASYNC INGESTION AND CACHING
 
 Current active task:
-Review Phase 8 reranker latency and decide whether to optimize before Phase 9.
+Start asynchronous ingestion and durable caching.
 
 Immediate next steps:
 1. Keep FastAPI running with uv run mrag serve-api --host 127.0.0.1 --port 8000.
-2. Use POST /ask with retrieval_mode=hybrid for warm retrieval tests.
-3. Decide whether reranker latency is acceptable for the local baseline.
-4. Later connect /ask generation to llama-server instead of llama-cli cold starts.
+2. Keep llama-server running separately when generation testing starts.
+3. Run uv run mrag eval-retrieval --generate after llama-server is reachable.
+4. Move into Phase 12 for background processing and durable cache.

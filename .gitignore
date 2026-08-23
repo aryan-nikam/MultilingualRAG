@@ -6,4 +6,4 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 postgres_data/
-
+data/input/uploads/

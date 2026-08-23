@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Multilingual RAG</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <div>
+        <h1>Multilingual RAG</h1>
+        <p id="systemStatus">Checking system status...</p>
+      </div>
+      <button id="refreshButton" type="button">Refresh</button>
+    </header>
+
+    <main class="layout">
+      <section class="panel upload-panel" aria-labelledby="uploadTitle">
+        <h2 id="uploadTitle">Documents</h2>
+        <form id="uploadForm" class="upload-form">
+          <label for="documentFile">PDF or TXT file</label>
+          <div class="file-row">
+            <input id="documentFile" name="file" type="file" accept=".pdf,.txt" required />
+            <button id="uploadButton" type="submit">Upload & Process</button>
+          </div>
+        </form>
+        <div id="uploadStatus" class="status-line" role="status"></div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Language</th>
+                <th>Status</th>
+                <th>Chunks</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="documentsTable"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel chat-panel" aria-labelledby="chatTitle">
+        <h2 id="chatTitle">Ask</h2>
+        <form id="chatForm" class="chat-form">
+          <label for="question">Question</label>
+          <textarea id="question" rows="4" required></textarea>
+          <div class="controls">
+            <label>
+              Retrieval
+              <select id="retrievalMode">
+                <option value="hybrid">Hybrid</option>
+                <option value="vector">Vector</option>
+                <option value="keyword">Keyword</option>
+              </select>
+            </label>
+            <label>
+              Top K
+              <input id="topK" type="number" min="1" max="20" value="3" />
+            </label>
+            <label class="checkbox-label">
+              <input id="rerank" type="checkbox" checked />
+              Rerank
+            </label>
+            <label class="checkbox-label">
+              <input id="generate" type="checkbox" checked />
+              Generate
+            </label>
+          </div>
+          <p class="helper-text">If generation fails on long documents, reduce Top K or ask a narrower question.</p>
+          <button id="askButton" type="submit">Ask</button>
+        </form>
+        <div id="chatStatus" class="status-line" role="status"></div>
+        <section class="answer-block" aria-labelledby="answerTitle">
+          <h3 id="answerTitle">Answer</h3>
+          <pre id="answerText"></pre>
+        </section>
+        <section class="sources-block" aria-labelledby="sourcesTitle">
+          <h3 id="sourcesTitle">Sources</h3>
+          <ol id="sourcesList"></ol>
+        </section>
+      </section>
+    </main>
+
+    <script src="/static/app.js" defer></script>
+  </body>
+</html>

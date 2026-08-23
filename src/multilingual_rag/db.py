@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Any
 from uuid import uuid4
 
+from psycopg.types.json import Jsonb
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import psycopg
@@ -20,6 +21,7 @@ EXPECTED_TABLES = {
     "document_pages",
     "chunks",
     "embeddings",
+    "query_logs",
 }
 
 KEYWORD_STOP_WORDS = {
@@ -128,6 +130,11 @@ class RetrievedChunk:
     keyword_score: float | None = None
     rerank_score: float | None = None
     retrieval_source: str = "vector"
+
+
+@dataclass(frozen=True)
+class QueryLogResult:
+    query_id: str
 
 
 def check_database(database_url: str) -> DatabaseCheck:
@@ -331,6 +338,52 @@ def get_document_pages(database_url: str, document_id: str) -> list[StoredPage]:
         )
         for row in rows
     ]
+
+
+def get_document_name(database_url: str, document_id: str) -> str:
+    with psycopg.connect(_with_connect_timeout(database_url)) as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT document_name FROM documents WHERE document_id = %s;",
+                (document_id,),
+            )
+            row = cursor.fetchone()
+
+    if row is None:
+        raise ValueError(f"document not found: {document_id}")
+
+    return row[0]
+
+
+def update_document_status(
+    database_url: str,
+    document_id: str,
+    status: str,
+    error_details: str | None = None,
+) -> None:
+    with psycopg.connect(_with_connect_timeout(database_url)) as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE documents
+                SET status = %s, error_details = %s, updated_at = now()
+                WHERE document_id = %s;
+                """,
+                (status, error_details, document_id),
+            )
+
+            if cursor.rowcount == 0:
+                raise ValueError(f"document not found: {document_id}")
+
+
+def delete_document(database_url: str, document_id: str) -> bool:
+    with psycopg.connect(_with_connect_timeout(database_url)) as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "DELETE FROM documents WHERE document_id = %s;",
+                (document_id,),
+            )
+            return cursor.rowcount > 0
 
 
 def get_source_pages(database_url: str, document_id: str) -> list[SourcePage]:
@@ -701,6 +754,53 @@ def retrieve_keyword_chunks(
         )
         for row in rows
     ]
+
+
+def log_query_result(
+    database_url: str,
+    question: str,
+    query_language: str,
+    retrieval_mode: str,
+    rerank: bool,
+    retrieved_chunks: list[dict[str, Any]],
+    answer: str | None,
+    citations: list[dict[str, Any]],
+    validation: dict[str, Any],
+    latency_ms: float | None,
+) -> QueryLogResult:
+    with psycopg.connect(_with_connect_timeout(database_url)) as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO query_logs (
+                    question,
+                    query_language,
+                    retrieval_mode,
+                    rerank,
+                    retrieved_chunks,
+                    answer,
+                    citations,
+                    validation,
+                    latency_ms
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING query_id;
+                """,
+                (
+                    question,
+                    query_language,
+                    retrieval_mode,
+                    rerank,
+                    Jsonb(retrieved_chunks),
+                    answer,
+                    Jsonb(citations),
+                    Jsonb(validation),
+                    latency_ms,
+                ),
+            )
+            query_id = cursor.fetchone()[0]
+
+    return QueryLogResult(query_id=str(query_id))
 
 
 def _keyword_terms(query: str) -> list[str]:

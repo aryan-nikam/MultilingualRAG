@@ -8,6 +8,7 @@ dependencies = [
     "lingua-language-detector>=2.0",
     "psycopg[binary]>=3.2",
     "pymupdf>=1.24",
+    "python-multipart>=0.0.20",
     "sentence-transformers>=3.0",
     "uvicorn[standard]>=0.52.4",
 ]
@@ -21,4 +22,3 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/multilingual_rag"]
-

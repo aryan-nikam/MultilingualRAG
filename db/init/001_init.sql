@@ -58,4 +58,3 @@ CREATE INDEX IF NOT EXISTS idx_chunks_language ON chunks(language);
 CREATE INDEX IF NOT EXISTS idx_embeddings_chunk_id ON embeddings(chunk_id);
 CREATE INDEX IF NOT EXISTS idx_embeddings_vector_cosine
     ON embeddings USING hnsw (embedding vector_cosine_ops);
-

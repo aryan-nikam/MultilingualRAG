@@ -26,8 +26,10 @@ from multilingual_rag.db import (
     update_document_and_chunk_language,
 )
 from multilingual_rag.embeddings import embed_text, embed_texts
+from multilingual_rag.evaluation import load_eval_cases, run_retrieval_eval
 from multilingual_rag.language import detect_language
 from multilingual_rag.llama_cpp import run_prompt
+from multilingual_rag.llama_server import generate_with_llama_server
 from multilingual_rag.parsers import iter_supported_files, parse_document
 from multilingual_rag.rag import retrieve_for_question
 
@@ -436,7 +438,15 @@ def ask(
         print(result.prompt[:1200])
         return 0
 
-    return llm_prompt(result.prompt, settings.llama_max_tokens, settings.llama_temperature)
+    try:
+        answer = generate_with_llama_server(settings, result.prompt).text
+    except Exception as exc:
+        print(f"[MISSING] llama-server generation: {exc}")
+        return 1
+
+    print("[OK] answer")
+    print(answer)
+    return 0
 
 
 def serve_api(host: str, port: int) -> int:
@@ -444,6 +454,54 @@ def serve_api(host: str, port: int) -> int:
 
     uvicorn.run("multilingual_rag.api:app", host=host, port=port)
     return 0
+
+
+def eval_retrieval(
+    eval_path: str,
+    top_k: int,
+    retrieval_mode: str,
+    rerank: bool,
+    generate_answers: bool,
+) -> int:
+    settings = load_settings()
+
+    try:
+        cases = load_eval_cases(Path(eval_path))
+        summary = run_retrieval_eval(
+            settings=settings,
+            cases=cases,
+            top_k=top_k,
+            retrieval_mode=retrieval_mode,
+            rerank=rerank,
+            generate_answers=generate_answers,
+        )
+    except Exception as exc:
+        print(f"[MISSING] eval retrieval: {exc}")
+        return 1
+
+    print(
+        "[OK] eval retrieval "
+        f"total={summary.total} "
+        f"passed={summary.passed} "
+        f"recall_at_{top_k}={summary.recall_at_k:.3f} "
+        f"mode={retrieval_mode} "
+        f"rerank={rerank} "
+        f"generate={generate_answers}"
+    )
+    for result in summary.results:
+        status = "PASS" if result.passed else "FAIL"
+        print(
+            f"[{status}] case={result.case_id} "
+            f"rank={result.best_rank} "
+            f"expected={result.expected_sources} "
+            f"retrieved={result.retrieved_sources} "
+            f"query_language={result.query_language} "
+            f"answer_language_ok={result.answer_language_ok} "
+            f"citation_ok={result.citation_ok} "
+            f"expected_answer_ok={result.expected_answer_ok}"
+        )
+
+    return 0 if summary.passed == summary.total else 1
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -537,6 +595,28 @@ def build_parser() -> argparse.ArgumentParser:
     serve_parser.add_argument("--host", default="127.0.0.1")
     serve_parser.add_argument("--port", type=int, default=8000)
 
+    eval_parser = subparsers.add_parser(
+        "eval-retrieval",
+        help="Run repeatable retrieval evaluation cases.",
+    )
+    eval_parser.add_argument("--eval-path", default="data/eval/seed_eval.jsonl")
+    eval_parser.add_argument("--top-k", type=int, default=3)
+    eval_parser.add_argument(
+        "--retrieval-mode",
+        choices=["vector", "keyword", "hybrid"],
+        default="hybrid",
+    )
+    eval_parser.add_argument(
+        "--no-rerank",
+        action="store_true",
+        help="Skip cross-encoder reranking during evaluation.",
+    )
+    eval_parser.add_argument(
+        "--generate",
+        action="store_true",
+        help="Generate answers through llama-server and validate language/citations.",
+    )
+
     prompt_parser = subparsers.add_parser(
         "llm-prompt",
         help="Send one prompt to the configured llama.cpp model.",
@@ -607,6 +687,15 @@ def main() -> int:
 
     if args.command == "serve-api":
         return serve_api(args.host, args.port)
+
+    if args.command == "eval-retrieval":
+        return eval_retrieval(
+            args.eval_path,
+            args.top_k,
+            args.retrieval_mode,
+            not args.no_rerank,
+            args.generate,
+        )
 
     parser.error(f"unknown command: {args.command}")
     return 2

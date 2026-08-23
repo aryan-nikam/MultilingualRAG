@@ -32,10 +32,14 @@ class Settings:
     llama_context_size: int
     llama_max_tokens: int
     llama_temperature: float
+    llama_server_url: str
+    llama_server_timeout_seconds: int
     database_url: str
     embedding_model_name: str
     embedding_dimension: int
     retrieval_top_k: int
+    rag_context_max_chars: int
+    rag_chunk_max_chars: int
     reranker_model_name: str
     reranker_enabled: bool
 
@@ -69,6 +73,8 @@ def load_settings() -> Settings:
         llama_context_size=int(os.environ.get("LLAMA_CONTEXT_SIZE", "2048")),
         llama_max_tokens=int(os.environ.get("LLAMA_MAX_TOKENS", "128")),
         llama_temperature=float(os.environ.get("LLAMA_TEMPERATURE", "0.2")),
+        llama_server_url=os.environ.get("LLAMA_SERVER_URL", "http://127.0.0.1:8080"),
+        llama_server_timeout_seconds=int(os.environ.get("LLAMA_SERVER_TIMEOUT_SECONDS", "120")),
         database_url=os.environ.get(
             "DATABASE_URL",
             "postgresql://postgres:root@localhost:5433/multilingual_rag",
@@ -76,6 +82,8 @@ def load_settings() -> Settings:
         embedding_model_name=os.environ.get("EMBEDDING_MODEL_NAME", "BAAI/bge-m3"),
         embedding_dimension=int(os.environ.get("EMBEDDING_DIMENSION", "1024")),
         retrieval_top_k=int(os.environ.get("RETRIEVAL_TOP_K", "5")),
+        rag_context_max_chars=int(os.environ.get("RAG_CONTEXT_MAX_CHARS", "2400")),
+        rag_chunk_max_chars=int(os.environ.get("RAG_CHUNK_MAX_CHARS", "900")),
         reranker_model_name=os.environ.get(
             "RERANKER_MODEL_NAME",
             "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1",
