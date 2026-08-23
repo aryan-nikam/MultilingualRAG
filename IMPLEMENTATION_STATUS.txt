@@ -1,0 +1,469 @@
+MULTILINGUAL RAG IMPLEMENTATION STATUS
+=====================================
+
+Project principle:
+Move steadily from low-level components to production-grade architecture.
+Do not jump directly to the final system. Each phase should teach us what is
+being used, why it is used, and how it fits into the RAG pipeline.
+
+Status values:
+- NOT DONE
+- IN-PROGRESS
+- DONE
+
+Chosen initial stack:
+- Runtime style: Local CLI first, FastAPI later
+- Initial document types: PDF + TXT
+- Initial languages: English + Hindi + Marathi
+- LLM runtime: llama.cpp
+- LLM model: C:\Users\Aryan\Desktop\llama.cpp\models\qwen2.5-0.5b-instruct-q4_k_m.gguf
+- Vector store: PostgreSQL + pgvector
+- Initial retrieval target: Basic semantic retrieval first, hybrid retrieval later
+
+
+PHASE 0 - PROJECT BASELINE AND LOCAL ENVIRONMENT
+================================================
+
+[DONE] Create implementation status tracker at project root.
+
+[DONE] Inspect local machine prerequisites:
+       Python 3.11.9 is available, uv is available, llama.cpp build exists,
+       model file exists, and PostgreSQL/psql is not currently on PATH.
+
+[DONE] Decide Python project structure:
+       src package, scripts folder, config folder, data folder, tests folder.
+
+[DONE] Create base Python environment and dependency management file.
+
+[DONE] Create configuration strategy:
+       .env.example, config loader, model paths, database URL,
+       and initial llama.cpp runtime settings.
+
+[DONE] Verify llama.cpp can run the selected GGUF model locally.
+       Verified manually in PowerShell because Codex-side llama.cpp execution
+       is unstable in this environment.
+
+[DONE] Create a minimal CLI command that sends a plain prompt to llama.cpp
+       and prints the response.
+       Command exists as: uv run mrag llm-prompt "<prompt>"
+       Note: avoid running model generation through Codex for now.
+
+
+PHASE 1 - STORAGE FOUNDATION: POSTGRESQL + PGVECTOR
+===================================================
+
+[DONE] Install PostgreSQL locally.
+       Docker path was attempted first.
+       Docker Hub pulls for pgvector/pgvector:pg17 repeatedly failed with EOF.
+       GHCR pglayers image pulled but did not stabilize during local startup.
+       Switched to native Windows PostgreSQL install.
+       PostgreSQL 18.6 is installed natively.
+       Password configured as root for local development.
+       Native PostgreSQL is listening on port 5433.
+
+[DONE] Install or enable pgvector support.
+       pgvector extension is installed and available in multilingual_rag.
+
+[DONE] Create local database for the RAG project.
+       Database name configured and verified as multilingual_rag.
+
+[DONE] Enable pgvector extension in the project database.
+       CREATE EXTENSION vector completed successfully.
+
+[DONE] Create initial schema:
+       documents, chunks, embeddings, and ingestion status tables.
+       db/init/001_init.sql applied successfully.
+
+[DONE] Store document metadata:
+       Schema columns are defined and smoke-tested.
+
+[DONE] Store chunk metadata:
+       Schema columns are defined and smoke-tested.
+
+[DONE] Store embedding vectors with chunk references.
+       Schema uses vector(1024), suitable for BGE-M3 dense embeddings.
+       Smoke test inserted and cleaned up a zero vector.
+
+[DONE] Add a small database health-check CLI command.
+       Command exists as: uv run mrag db-check
+
+[DONE] Add a small insert/read smoke test for documents and chunks.
+       Command exists as: uv run mrag db-smoke-test
+
+
+PHASE 2 - DOCUMENT INGESTION: PDF + TXT
+=======================================
+
+[DONE] Create local input document folder.
+       data/input exists and contains sample ingestion files.
+
+[DONE] Build TXT parser.
+       Implemented in src/multilingual_rag/parsers.py.
+
+[DONE] Build PDF parser using PyMuPDF or equivalent.
+       Implemented with PyMuPDF.
+
+[DONE] Extract page-level text from PDFs.
+       Each PDF page is stored as a separate document_pages row.
+
+[DONE] Preserve source metadata:
+       file name, file path, page number, and parser details.
+
+[DONE] Add basic text cleaning:
+       whitespace normalization and empty-line handling.
+
+[DONE] Save parsed document records into PostgreSQL.
+       Documents are inserted with status parsed.
+
+[DONE] Save parsed page/text records before chunking for debugging.
+       show-pages CLI command displays stored page previews.
+
+[DONE] Add ingestion CLI command:
+       ingest --path <file-or-folder>.
+
+[DONE] Test ingestion with one TXT file and one PDF file.
+       sample_english.txt and sample_pdf.pdf ingested successfully.
+
+
+PHASE 3 - CHUNKING FOUNDATION
+=============================
+
+[DONE] Define initial chunking policy:
+       Default policy is 450 estimated tokens per chunk with 75 token overlap.
+
+[DONE] Choose token counting approach suitable for local development.
+       Uses approximate whitespace token counting for Phase 3.
+
+[DONE] Implement paragraph-aware chunking for TXT.
+       Implemented in src/multilingual_rag/chunking.py.
+
+[DONE] Implement page-aware and paragraph-aware chunking for PDF text.
+       Chunks are generated from stored page-level text.
+
+[DONE] Preserve page number and document metadata on every chunk.
+       chunk_id, document_id, page_number, chunk_index, text, and token_count
+       are stored.
+
+[DONE] Generate stable chunk IDs.
+       Format: doc_<document-prefix>_p<page>_c<chunk-index>.
+
+[DONE] Store chunks in PostgreSQL.
+       Existing chunks for the document are replaced during re-chunking.
+
+[DONE] Add chunk inspection CLI command:
+       show-chunks --document-id <id>.
+
+[DONE] Manually inspect chunk quality on sample English text.
+       Verified TXT, PDF, and multi-chunk TXT samples.
+       Hindi and Marathi text quality inspection moves to Phase 4 after
+       language detection is added.
+
+
+PHASE 4 - LANGUAGE DETECTION
+============================
+
+[DONE] Choose language detection library:
+       Lingua is used locally for English, Hindi, and Marathi.
+
+[DONE] Detect language at document level.
+       detect-document-language updates the documents table.
+
+[DONE] Detect language at chunk level.
+       detect-document-language updates chunks for the document.
+
+[DONE] Detect language for user query.
+       ask detects query language before retrieval/generation.
+
+[DONE] Store detected language codes:
+       en, hi, mr, unknown.
+
+[DONE] Add confidence score where available.
+       CLI prints Lingua confidence for text/document detection.
+
+[DONE] Add fallback behavior for mixed or unknown language text.
+       Empty or undetected text returns unknown.
+
+[DONE] Test language detection on English, Hindi, Marathi samples.
+       English, Hindi, and Marathi sample documents were labeled correctly.
+
+
+PHASE 5 - MULTILINGUAL EMBEDDINGS
+=================================
+
+[DONE] Choose initial multilingual embedding model.
+       BGE-M3 selected.
+
+[DONE] Decide local embedding runtime:
+       sentence-transformers.
+
+[DONE] Create embedding service/module for text chunks.
+       Implemented in src/multilingual_rag/embeddings.py.
+
+[DONE] Generate embeddings for chunks.
+       embed-chunks generates normalized dense vectors.
+
+[DONE] Store embeddings in PostgreSQL pgvector column.
+       19 sample chunk embeddings are stored.
+
+[DONE] Add batch embedding for ingestion.
+       embed-chunks supports all chunks or a specific document_id.
+
+[DONE] Add embedding CLI smoke test:
+       embed-sample --text "<sample text>".
+
+[DONE] Validate vector dimensions match database schema.
+       BGE-M3 produced 1024-dimensional embeddings for vector(1024).
+
+[DONE] Test cross-language semantic similarity manually:
+       English, Hindi, and Marathi queries retrieved related multilingual chunks.
+
+
+PHASE 6 - BASIC LOCAL RAG CLI
+=============================
+
+[DONE] Build query CLI:
+       ask --question "<question>".
+
+[DONE] Detect query language.
+
+[DONE] Embed query with multilingual embedding model.
+
+[DONE] Retrieve top K chunks from PostgreSQL using pgvector similarity search.
+
+[DONE] Build context block from retrieved chunks.
+
+[DONE] Create grounded prompt:
+       answer only from context, say unknown if missing, respond in user's language.
+
+[DONE] Send prompt to llama.cpp model.
+       ask command supports full generation through llama.cpp.
+       Manual terminal verification is required because Codex-side llama.cpp
+       execution previously destabilized the session.
+
+[DONE] Print answer in terminal.
+       Implemented for full ask mode.
+
+[DONE] Print source citations:
+       document name and page number are printed before generation.
+
+[DONE] Test basic RAG on English document with English query.
+       Retrieval/context path verified with --no-generate.
+
+[DONE] Test basic RAG on Hindi document with Hindi query.
+       Retrieval/context path verified with --no-generate.
+
+[DONE] Test basic RAG on Marathi document with Marathi query.
+       Retrieval/context path verified with --no-generate.
+
+
+PHASE 7 - CROSS-LINGUAL RAG VALIDATION
+======================================
+
+[DONE] Test English query against Hindi document.
+       Semantic retrieval test returned Hindi document in top 3 for solar-energy query.
+
+[DONE] Test English query against Marathi document.
+       Semantic retrieval test returned Marathi document in top 3 for solar-energy query.
+
+[DONE] Test Hindi query against English document.
+       Hindi query returned English document in top 3.
+
+[DONE] Test Hindi query against Marathi document.
+       Hindi query returned Marathi document in top 2 for equivalent solar query.
+
+[DONE] Test Marathi query against English document.
+       Marathi query returned English document in top 3.
+
+[DONE] Test Marathi query against Hindi document.
+       Marathi query returned Hindi document in top 2 for equivalent solar query.
+
+[DONE] Record retrieval failures and weak examples.
+       Document-name targeting such as "What does the Hindi document say"
+       does not reliably rank that document first with vector-only retrieval.
+       This is expected to improve in Phase 8 with keyword/hybrid retrieval.
+
+[DONE] Tune chunking, embedding model, and top K based on results.
+       First-pass validation completed with vector-only retrieval.
+       Exact document-name targeting was identified as the main weakness and
+       moved into Phase 8 hybrid retrieval.
+
+
+PHASE 8 - BETTER RETRIEVAL
+==========================
+
+[DONE] Add PostgreSQL full-text search or BM25-style keyword retrieval.
+       Added db/init/002_hybrid_retrieval.sql with full-text indexes.
+       Added a local keyword scorer that boosts exact document-name matches.
+
+[DONE] Combine vector search and keyword search into hybrid retrieval.
+       CLI and API now support retrieval_mode=vector|keyword|hybrid.
+
+[DONE] Normalize and merge retrieval scores.
+       Hybrid retrieval normalizes vector and keyword candidates before merging.
+
+[DONE] Retrieve larger candidate set:
+       Hybrid retrieval currently uses max(top_k * 4, 20) candidates.
+
+[NOT DONE] Choose multilingual reranker.
+
+[NOT DONE] Add reranking step.
+
+[DONE] Send only top 3-5 retrieved chunks to LLM.
+       Current pipeline sends the final top_k hybrid chunks to the prompt.
+       Reranked top chunks will replace this once a reranker is added.
+
+[DONE] Compare retrieval quality before and after hybrid search/reranking.
+       Vector-only retrieval missed exact Hindi document targeting as rank 1.
+       Hybrid retrieval ranked sample_hindi.txt first for the same query.
+
+
+PHASE 9 - CITATIONS AND ANSWER QUALITY
+======================================
+
+[NOT DONE] Standardize citation format.
+
+[NOT DONE] Ensure every generated answer includes sources when context is used.
+
+[NOT DONE] Handle missing answer case explicitly.
+
+[NOT DONE] Add prompt-injection-resistant context formatting.
+
+[NOT DONE] Add answer validation checks:
+           source presence, empty context handling, and unsupported claim detection.
+
+[NOT DONE] Store query, retrieved chunks, answer, and citations for debugging.
+
+
+PHASE 10 - EVALUATION HARNESS
+=============================
+
+[NOT DONE] Create evaluation dataset format:
+           question, language, expected answer, expected source, notes.
+
+[NOT DONE] Add at least 10 seed evaluation questions.
+
+[NOT DONE] Measure retrieval Recall@K.
+
+[NOT DONE] Measure whether expected source appears in retrieved chunks.
+
+[NOT DONE] Track answer language correctness.
+
+[NOT DONE] Track citation correctness.
+
+[NOT DONE] Add repeatable evaluation CLI command.
+
+
+PHASE 11 - API LAYER AFTER CLI IS SATISFACTORY
+==============================================
+
+[DONE] Introduce FastAPI backend.
+       Added src/multilingual_rag/api.py and serve-api CLI command.
+
+[NOT DONE] Add POST /documents/upload.
+
+[NOT DONE] Add POST /documents/{id}/process.
+
+[IN-PROGRESS] Add POST /chat.
+              Implemented retrieval endpoint as POST /ask for current local RAG scope.
+              Production chat endpoint remains for later.
+
+[DONE] Add GET /documents.
+
+[NOT DONE] Add DELETE /documents/{id}.
+
+[DONE] Reuse CLI-tested ingestion, retrieval, and generation modules.
+       API and CLI share the retrieval/prompt builder in src/multilingual_rag/rag.py.
+
+[DONE] Add basic API tests.
+       Manually tested /health, /documents, /ask, and cache behavior.
+
+
+PHASE 12 - ASYNC INGESTION AND CACHING
+======================================
+
+[NOT DONE] Add background worker for document processing.
+
+[NOT DONE] Add Redis for job queue or cache.
+
+[NOT DONE] Return processing status immediately after upload.
+
+[NOT DONE] Track document states:
+           uploaded, processing, ready, failed.
+
+[DONE] Add query/result caching where safe.
+       Added in-memory retrieval cache in FastAPI for local development.
+       Cache hit latency observed around 5-15 ms.
+
+[NOT DONE] Add retry behavior for failed ingestion jobs.
+
+
+PHASE 13 - MULTI-USER AND SECURITY FOUNDATION
+=============================================
+
+[NOT DONE] Add user and tenant schema.
+
+[NOT DONE] Add tenant_id and user_id to documents and chunks.
+
+[NOT DONE] Enforce tenant filtering in every retrieval query.
+
+[NOT DONE] Add authentication strategy:
+           JWT or OAuth.
+
+[NOT DONE] Add file validation:
+           type checks, size checks, malformed file handling.
+
+[NOT DONE] Add rate limiting.
+
+[NOT DONE] Add prompt injection defenses.
+
+
+PHASE 14 - OBSERVABILITY
+========================
+
+[NOT DONE] Add structured logging.
+
+[NOT DONE] Log request_id, query language, retrieval scores, model name,
+           latency, and errors.
+
+[NOT DONE] Add timing for:
+           parsing, chunking, embedding, retrieval, reranking, LLM generation.
+
+[NOT DONE] Add Langfuse or equivalent tracing after core pipeline is stable.
+
+[NOT DONE] Add metrics export:
+           Prometheus/OpenTelemetry later.
+
+
+PHASE 15 - DEPLOYMENT AND SCALE
+===============================
+
+[NOT DONE] Add Dockerfile for CLI/API runtime.
+
+[NOT DONE] Add docker-compose for:
+           app, PostgreSQL, pgvector, Redis.
+
+[NOT DONE] Add persistent volumes for database and uploaded files.
+
+[NOT DONE] Add environment-based configuration.
+
+[NOT DONE] Add deployment documentation.
+
+[NOT DONE] Add GPU-aware path for embedding/reranking if required.
+
+[NOT DONE] Add production reverse proxy or cloud deployment plan.
+
+
+CURRENT PROJECT POSITION
+========================
+
+Current phase:
+PHASE 8 - BETTER RETRIEVAL
+
+Current active task:
+Choose and benchmark a multilingual reranker for Phase 8.
+
+Immediate next steps:
+1. Keep FastAPI running with uv run mrag serve-api --host 127.0.0.1 --port 8000.
+2. Use POST /ask with retrieval_mode=hybrid for warm retrieval tests.
+3. Choose a multilingual reranker and benchmark it against Phase 7 weak examples.
+4. Later connect /ask generation to llama-server instead of llama-cli cold starts.

@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: ghcr.io/pglayers/pglayers-full:17
+    container_name: multilingual-rag-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: rag_local_password
+      POSTGRES_DB: multilingual_rag
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d multilingual_rag"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres_data:

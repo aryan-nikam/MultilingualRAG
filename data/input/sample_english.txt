@@ -1,0 +1,9 @@
+Solar Energy Overview
+
+India has significant solar energy potential because many regions receive high
+solar irradiation throughout the year. Solar projects can be deployed at utility
+scale as well as on rooftops.
+
+For this RAG test document, the important fact is simple: solar energy can help
+reduce dependence on fossil fuels when paired with grid planning and storage.
+
