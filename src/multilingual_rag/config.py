@@ -36,6 +36,8 @@ class Settings:
     embedding_model_name: str
     embedding_dimension: int
     retrieval_top_k: int
+    reranker_model_name: str
+    reranker_enabled: bool
 
 
 def load_settings() -> Settings:
@@ -74,4 +76,10 @@ def load_settings() -> Settings:
         embedding_model_name=os.environ.get("EMBEDDING_MODEL_NAME", "BAAI/bge-m3"),
         embedding_dimension=int(os.environ.get("EMBEDDING_DIMENSION", "1024")),
         retrieval_top_k=int(os.environ.get("RETRIEVAL_TOP_K", "5")),
+        reranker_model_name=os.environ.get(
+            "RERANKER_MODEL_NAME",
+            "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1",
+        ),
+        reranker_enabled=os.environ.get("RERANKER_ENABLED", "true").lower()
+        in {"1", "true", "yes", "on"},
     )

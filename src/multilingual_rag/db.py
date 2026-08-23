@@ -126,6 +126,7 @@ class RetrievedChunk:
     score: float
     vector_score: float | None = None
     keyword_score: float | None = None
+    rerank_score: float | None = None
     retrieval_source: str = "vector"
 
 

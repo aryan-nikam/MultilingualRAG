@@ -10,17 +10,20 @@ from pydantic import BaseModel, Field
 from multilingual_rag.config import load_settings
 from multilingual_rag.db import check_database, list_documents
 from multilingual_rag.embeddings import embed_text
+from multilingual_rag.reranking import warmup_reranker
 from multilingual_rag.rag import RetrievalResult, retrieve_for_question
 
 
 settings = load_settings()
-retrieval_cache: dict[tuple[str, int, str], RetrievalResult] = {}
+retrieval_cache: dict[tuple[str, int, str, bool, str, str], RetrievalResult] = {}
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     start = time.perf_counter()
     embed_text(settings.embedding_model_name, "warmup")
+    if settings.reranker_enabled:
+        warmup_reranker(settings.reranker_model_name)
     app.state.embedding_warmup_seconds = round(time.perf_counter() - start, 4)
     yield
 
@@ -33,6 +36,7 @@ class AskRequest(BaseModel):
     top_k: int = Field(default=5, ge=1, le=20)
     no_generate: bool = True
     retrieval_mode: str = Field(default="hybrid", pattern="^(vector|keyword|hybrid)$")
+    rerank: bool | None = None
 
 
 class SourceResponse(BaseModel):
@@ -46,6 +50,7 @@ class SourceResponse(BaseModel):
     retrieval_source: str
     vector_score: float | None
     keyword_score: float | None
+    rerank_score: float | None
     preview: str
 
 
@@ -53,6 +58,8 @@ class AskResponse(BaseModel):
     question: str
     query_language: str
     retrieval_mode: str
+    rerank: bool
+    reranker_model: str | None
     top_k: int
     cache_hit: bool
     latency_ms: float
@@ -73,6 +80,7 @@ def _source_response(rank: int, chunk: Any) -> SourceResponse:
         retrieval_source=chunk.retrieval_source,
         vector_score=None if chunk.vector_score is None else round(chunk.vector_score, 4),
         keyword_score=None if chunk.keyword_score is None else round(chunk.keyword_score, 4),
+        rerank_score=None if chunk.rerank_score is None else round(chunk.rerank_score, 4),
         preview=chunk.text[:220].replace("\n", " "),
     )
 
@@ -83,6 +91,9 @@ def health() -> dict[str, Any]:
     return {
         "status": "ok",
         "embedding_model": settings.embedding_model_name,
+        "reranker_model": settings.reranker_model_name
+        if settings.reranker_enabled
+        else None,
         "embedding_warmup_seconds": getattr(app.state, "embedding_warmup_seconds", None),
         "database_connected": db.connected,
         "pgvector_installed": db.vector_extension_installed,
@@ -103,7 +114,9 @@ def ask(request: AskRequest) -> AskResponse:
         normalized_question.casefold(),
         request.top_k,
         request.retrieval_mode,
+        settings.reranker_enabled if request.rerank is None else request.rerank,
         settings.embedding_model_name,
+        settings.reranker_model_name,
     )
     cache_hit = cache_key in retrieval_cache
 
@@ -115,6 +128,7 @@ def ask(request: AskRequest) -> AskResponse:
             question=normalized_question,
             top_k=request.top_k,
             retrieval_mode=request.retrieval_mode,
+            rerank=request.rerank,
         )
         retrieval_cache[cache_key] = result
 
@@ -122,6 +136,8 @@ def ask(request: AskRequest) -> AskResponse:
         question=result.question,
         query_language=result.query_language.language,
         retrieval_mode=result.retrieval_mode,
+        rerank=result.rerank,
+        reranker_model=settings.reranker_model_name if result.rerank else None,
         top_k=len(result.chunks),
         cache_hit=cache_hit,
         latency_ms=round((time.perf_counter() - start) * 1000, 2),

@@ -10,6 +10,7 @@ from multilingual_rag.db import (
 )
 from multilingual_rag.embeddings import embed_text
 from multilingual_rag.language import LanguageDetection, detect_language
+from multilingual_rag.reranking import rerank_chunks
 
 
 RETRIEVAL_MODES = {"vector", "keyword", "hybrid"}
@@ -20,6 +21,7 @@ class RetrievalResult:
     question: str
     query_language: LanguageDetection
     retrieval_mode: str
+    rerank: bool
     chunks: list[RetrievedChunk]
     prompt: str
 
@@ -52,37 +54,52 @@ def retrieve_for_question(
     question: str,
     top_k: int | None = None,
     retrieval_mode: str = "hybrid",
+    rerank: bool | None = None,
 ) -> RetrievalResult:
     if retrieval_mode not in RETRIEVAL_MODES:
         raise ValueError(f"unsupported retrieval_mode: {retrieval_mode}")
 
     effective_top_k = top_k or settings.retrieval_top_k
+    use_reranker = settings.reranker_enabled if rerank is None else rerank
     query_language = detect_language(question)
+    candidate_limit = _candidate_limit(effective_top_k)
 
     if retrieval_mode == "keyword":
-        chunks = retrieve_keyword_chunks(settings.database_url, question, effective_top_k)
+        limit = candidate_limit if use_reranker else effective_top_k
+        chunks = retrieve_keyword_chunks(settings.database_url, question, limit)
     else:
+        limit = candidate_limit if retrieval_mode == "hybrid" or use_reranker else effective_top_k
         query_vector = embed_text(settings.embedding_model_name, question)
         vector_candidates = retrieve_similar_chunks(
             settings.database_url,
             settings.embedding_model_name,
             query_vector,
-            _candidate_limit(effective_top_k),
+            limit,
         )
 
         if retrieval_mode == "vector":
-            chunks = vector_candidates[:effective_top_k]
+            chunks = vector_candidates
         else:
             keyword_candidates = retrieve_keyword_chunks(
                 settings.database_url,
                 question,
-                _candidate_limit(effective_top_k),
+                candidate_limit,
             )
             chunks = _merge_hybrid_candidates(
                 vector_candidates=vector_candidates,
                 keyword_candidates=keyword_candidates,
-                top_k=effective_top_k,
+                top_k=candidate_limit,
             )
+
+    if use_reranker:
+        chunks = rerank_chunks(
+            model_name=settings.reranker_model_name,
+            question=question,
+            chunks=chunks,
+            top_k=effective_top_k,
+        )
+    else:
+        chunks = chunks[:effective_top_k]
 
     prompt = build_rag_prompt(question, query_language.language, chunks)
 
@@ -90,6 +107,7 @@ def retrieve_for_question(
         question=question,
         query_language=query_language,
         retrieval_mode=retrieval_mode,
+        rerank=use_reranker,
         chunks=chunks,
         prompt=prompt,
     )

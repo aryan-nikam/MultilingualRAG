@@ -304,17 +304,27 @@ PHASE 8 - BETTER RETRIEVAL
 [DONE] Retrieve larger candidate set:
        Hybrid retrieval currently uses max(top_k * 4, 20) candidates.
 
-[NOT DONE] Choose multilingual reranker.
+[DONE] Choose multilingual reranker.
+       Initial local reranker is cross-encoder/mmarco-mMiniLMv2-L12-H384-v1.
+       It is a sentence-transformers-compatible multilingual MS MARCO reranker.
 
-[NOT DONE] Add reranking step.
+[DONE] Add reranking step.
+       Shared CLI/API retrieval now retrieves broad candidates, reranks
+       query/chunk pairs with the cross-encoder, and keeps only final top_k.
+       Reranker passage text includes document name, language, page, and chunk
+       text so exact document intent is preserved.
 
 [DONE] Send only top 3-5 retrieved chunks to LLM.
-       Current pipeline sends the final top_k hybrid chunks to the prompt.
-       Reranked top chunks will replace this once a reranker is added.
+       Current pipeline sends the final top_k reranked chunks to the prompt
+       when reranking is enabled.
 
 [DONE] Compare retrieval quality before and after hybrid search/reranking.
        Vector-only retrieval missed exact Hindi document targeting as rank 1.
        Hybrid retrieval ranked sample_hindi.txt first for the same query.
+       Reranked hybrid retrieval also ranked all six English/Hindi/Marathi
+       cross-document checks at rank 1.
+       Warm API reranked retrieval latency is currently around 2.2-2.5 seconds
+       before cache, with cache hits around 0.01 ms.
 
 
 PHASE 9 - CITATIONS AND ANSWER QUALITY
@@ -460,10 +470,10 @@ Current phase:
 PHASE 8 - BETTER RETRIEVAL
 
 Current active task:
-Choose and benchmark a multilingual reranker for Phase 8.
+Review Phase 8 reranker latency and decide whether to optimize before Phase 9.
 
 Immediate next steps:
 1. Keep FastAPI running with uv run mrag serve-api --host 127.0.0.1 --port 8000.
 2. Use POST /ask with retrieval_mode=hybrid for warm retrieval tests.
-3. Choose a multilingual reranker and benchmark it against Phase 7 weak examples.
+3. Decide whether reranker latency is acceptable for the local baseline.
 4. Later connect /ask generation to llama-server instead of llama-cli cold starts.

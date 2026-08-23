@@ -393,11 +393,12 @@ def ask(
     top_k: int | None,
     no_generate: bool,
     retrieval_mode: str,
+    rerank: bool,
 ) -> int:
     settings = load_settings()
 
     try:
-        result = retrieve_for_question(settings, question, top_k, retrieval_mode)
+        result = retrieve_for_question(settings, question, top_k, retrieval_mode, rerank)
     except Exception as exc:
         print(f"[MISSING] retrieval: {exc}")
         return 1
@@ -410,6 +411,7 @@ def ask(
         "[OK] retrieval "
         f"query_language={result.query_language.language} "
         f"mode={result.retrieval_mode} "
+        f"rerank={result.rerank} "
         f"top_k={len(result.chunks)}"
     )
     for index, chunk in enumerate(result.chunks, start=1):
@@ -423,6 +425,7 @@ def ask(
             f"source={chunk.retrieval_source} "
             f"vector_score={chunk.vector_score} "
             f"keyword_score={chunk.keyword_score} "
+            f"rerank_score={chunk.rerank_score} "
             f"chunk_id={chunk.chunk_id} "
             f"preview={preview}"
         )
@@ -521,6 +524,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Show retrieval/context only and skip llama.cpp generation.",
     )
+    ask_parser.add_argument(
+        "--no-rerank",
+        action="store_true",
+        help="Skip cross-encoder reranking and use raw retrieval scores.",
+    )
 
     serve_parser = subparsers.add_parser(
         "serve-api",
@@ -589,7 +597,13 @@ def main() -> int:
         return embed_sample(args.text)
 
     if args.command == "ask":
-        return ask(args.question, args.top_k, args.no_generate, args.retrieval_mode)
+        return ask(
+            args.question,
+            args.top_k,
+            args.no_generate,
+            args.retrieval_mode,
+            not args.no_rerank,
+        )
 
     if args.command == "serve-api":
         return serve_api(args.host, args.port)
