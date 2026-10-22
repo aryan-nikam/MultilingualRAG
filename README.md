@@ -2,7 +2,7 @@
 
 A local-first Retrieval-Augmented Generation (RAG) application that lets users upload PDF and TXT documents and ask questions in **English, Hindi, or Marathi**. It combines multilingual embeddings, hybrid retrieval, cross-encoder reranking, and a locally hosted language model to produce context-grounded answers with source citations.
 
-> **Project status:** Core CLI, retrieval pipeline, evaluation harness, FastAPI backend, and basic web UI are implemented. Asynchronous ingestion, multi-user security, observability, and production deployment remain planned work.
+
 
 ## Features
 
@@ -270,24 +270,6 @@ The following is a conceptual outline based on the implementation tracker; confi
 
 Additional modules and files may exist in the actual repository.
 
-## Limitations and Roadmap
-
-The following work is marked incomplete in the implementation status tracker:
-
-- [ ] Background worker / asynchronous document processing.
-- [ ] Explicit ingestion states (`uploaded`, `processing`, `ready`, `failed`) and retry behavior.
-- [ ] Redis-backed job queue or durable cache.
-- [ ] Multi-user authentication and tenant isolation.
-- [ ] Enforced user/tenant filters in all retrieval queries.
-- [ ] Upload file type/size validation and malformed-file handling.
-- [ ] Rate limiting and stronger prompt-injection defenses.
-- [ ] Structured logging, request IDs, pipeline timing, and tracing.
-- [ ] Metrics export through Prometheus/OpenTelemetry.
-- [ ] Dockerfile, Docker Compose, persistent volumes, and deployment documentation.
-- [ ] Production reverse proxy or cloud deployment plan.
-- [ ] GPU-aware embedding/reranking path, if required.
-
-The project should currently be treated as a **local development prototype**, not a secured multi-user production service.
 
 ## Security Notes
 
